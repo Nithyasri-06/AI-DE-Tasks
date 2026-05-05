@@ -54,11 +54,12 @@ def predict_next_words(input_text, n=10):
 
     last_two = (words[-2], words[-1])
     model_output = []
+    freq = {}
 
     if last_two in MODEL and len(MODEL[last_two]) > 0:
         suggestions = MODEL[last_two]
 
-        freq = {}
+       
         for w in suggestions:
             freq[w] = freq.get(w, 0) + 1
 
@@ -75,17 +76,25 @@ def predict_next_words(input_text, n=10):
             and w.isalpha()
         ]
     rule_output = RULES.get(last_two, [])
-    final = []
-    # priority 1: model output
-    final.extend(model_output)
-    # priority 2: rule-based boost (only if model weak/empty)
-    if len(final) < 2:
-        for w in rule_output:
-            if w not in final:
-                final.append(w)
-    if not final:
-        final = fallback_words(n,context=last_two)
-    else:
-        final = final[:n]
+    candidates = set(model_output + rule_output)
 
-    return final
+    if not candidates:
+        candidates = set(fallback_words(n, context=last_two))
+
+    scored = []
+
+    for w in candidates:
+        if not w.isalpha():
+            continue
+        if w in STOPWORDS or w in LOW_VALUE:
+            continue
+
+        model_score = freq.get(w, 0)
+        zipf_score = zipf_frequency(w, "en")
+
+        score = model_score + zipf_score
+        scored.append((w, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+
+    return [w for w, _ in scored[:n]]
